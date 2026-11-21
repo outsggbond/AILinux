@@ -32,6 +32,7 @@ add_library(ailinux_core
     system/core/self_state.cpp
     system/core/self_state_store.cpp
     system/core/super_self_workspace.cpp
+    system/core/release_recovery.cpp
 )
 
 target_include_directories(ailinux_core PUBLIC
@@ -43,7 +44,7 @@ target_compile_options(ailinux_core PRIVATE
     -Wextra
     -Wpedantic
 )
-target_link_libraries(ailinux_core PUBLIC OpenSSL::Crypto)
+target_link_libraries(ailinux_core PUBLIC OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
 add_executable(ailinux-super-self
     system/core/super_self_workspace_main.cpp
@@ -130,6 +131,15 @@ if(BUILD_TESTING)
         -Wall -Wextra -Wpedantic
     )
     add_test(NAME super_self_workspace_test COMMAND super_self_workspace_test)
+
+    add_executable(release_recovery_test
+        tests/release_recovery_test.cpp
+    )
+    target_link_libraries(release_recovery_test PRIVATE ailinux_core)
+    target_compile_options(release_recovery_test PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME release_recovery_test COMMAND release_recovery_test)
 
     add_test(NAME healthd_once COMMAND ailinux-healthd --once)
     set_tests_properties(healthd_once PROPERTIES

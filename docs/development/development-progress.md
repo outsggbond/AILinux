@@ -142,10 +142,20 @@ the disposable workspace and no deployment or release operation is exposed.
 The worktree test is part of CTest and verifies private workspace creation plus
 a successful workspace build.
 
-## Phases 7 and 8
+## Phase 7 — release and recovery foundation
 
-**Status: Not started.** No distribution image, recovery environment,
-deployment/rollback pipeline, or complete integration/fault-injection suite is
+**Status: Initial local release-state foundation implemented.**
+`system/core/release_recovery.cpp` maintains an owner-private, atomic JSON
+release state and append-only JSONL audit history. It records stable/candidate
+SHA-256 identities, denies activation until verification passes, switches the
+recorded current/rollback slots, and rolls back explicitly. It has no bootloader,
+partition, kernel-install, reboot, watchdog, or real deployment capability;
+those remain out of scope until an isolated VM/recovery test environment exists.
+
+## Phase 8
+
+**Status: Not started.** No complete integration/fault-injection suite,
+distribution image, or production deployment/recovery validation is
 implemented.
 
 ## Verification for this slice
