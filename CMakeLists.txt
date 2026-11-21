@@ -34,6 +34,7 @@ add_library(ailinux_core
     system/core/super_self_workspace.cpp
     system/core/release_recovery.cpp
     system/core/ailinux_ipc.cpp
+    system/core/audit_chain.cpp
 )
 
 target_include_directories(ailinux_core PUBLIC
@@ -177,6 +178,11 @@ if(BUILD_TESTING)
     target_link_libraries(ailinux_ipc_test PRIVATE ailinux_core)
     target_compile_options(ailinux_ipc_test PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ailinux_ipc_test COMMAND ailinux_ipc_test)
+
+    add_executable(audit_chain_test tests/audit_chain_test.cpp)
+    target_link_libraries(audit_chain_test PRIVATE ailinux_core)
+    target_compile_options(audit_chain_test PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME audit_chain_test COMMAND audit_chain_test)
 
     add_test(NAME healthd_once COMMAND ailinux-healthd --once)
     set_tests_properties(healthd_once PROPERTIES

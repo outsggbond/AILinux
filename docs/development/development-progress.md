@@ -163,6 +163,10 @@ long-duration testing remain not implemented. Host CTest now also exercises unau
 confirmation requirements, 1,000 bounded read invocations with complete audit
 evidence, and a Unix-domain framed IPC exchange with SO_PEERCRED and pidfd
 peer locking. It is not yet an authenticated privileged system-service boundary.
+An owner-private append-only audit chain now adds HMAC-SHA256 chained JSONL
+records, fsync, sequence validation, chain-head deletion detection, and
+record-tampering detection. The key is local process material, not
+TPM/root-sealed, and the audit service is not independently privileged.
 
 ## Verification for this slice
 
