@@ -154,9 +154,12 @@ those remain out of scope until an isolated VM/recovery test environment exists.
 
 ## Phase 8
 
-**Status: Not started.** No complete integration/fault-injection suite,
-distribution image, or production deployment/recovery validation is
-implemented.
+**Status: Initial host integration regression implemented.** The
+`phase8_integration_test` CTest target verifies unverified-candidate rejection,
+verified activation, stable rollback, malformed-state fail-closed behavior,
+Super Self worktree isolation/cleanup, and health JSON output in one process.
+Live multi-Agent, VM boot, privileged authorization, fault-injection, and
+long-duration testing remain not implemented.
 
 ## Verification for this slice
 
