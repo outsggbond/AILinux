@@ -11,7 +11,8 @@ integration boundaries already implemented:
 - Super Self creates and removes a detached, owner-private worktree;
 - the deterministic health monitor emits the documented JSON schema;
 - unauthorized tool use, missing confirmation, and privileged-tool access are denied and hashed into the audit store;
-- 1,000 authorized read invocations produce bounded, complete started/executed audit events.
+- 1,000 authorized read invocations produce bounded, complete started/executed audit events;
+- Unix-domain IPC validates bounded framed JSON, SO_PEERCRED UID/GID/PID identity and pidfd lock acquisition.
 
 This test does not start the AI core, boot a distribution, modify partitions or
 bootloader configuration, install a kernel, enable a systemd unit, or invoke a

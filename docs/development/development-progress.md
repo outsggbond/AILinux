@@ -159,9 +159,10 @@ those remain out of scope until an isolated VM/recovery test environment exists.
 verified activation, stable rollback, malformed-state fail-closed behavior,
 Super Self worktree isolation/cleanup, and health JSON output in one process.
 Live multi-Agent, VM boot, privileged authorization, fault-injection, and
-long-duration testing remain not implemented. Host CTest now also exercises
-unauthorized and privileged tool denial, confirmation requirements, and
-1,000 bounded read invocations with complete audit evidence.
+long-duration testing remain not implemented. Host CTest now also exercises unauthorized and privileged tool denial,
+confirmation requirements, 1,000 bounded read invocations with complete audit
+evidence, and a Unix-domain framed IPC exchange with SO_PEERCRED and pidfd
+peer locking. It is not yet an authenticated privileged system-service boundary.
 
 ## Verification for this slice
 

@@ -33,6 +33,7 @@ add_library(ailinux_core
     system/core/self_state_store.cpp
     system/core/super_self_workspace.cpp
     system/core/release_recovery.cpp
+    system/core/ailinux_ipc.cpp
 )
 
 target_include_directories(ailinux_core PUBLIC
@@ -171,6 +172,11 @@ if(BUILD_TESTING)
     )
     add_test(NAME phase8_security_regression_test
              COMMAND phase8_security_regression_test)
+
+    add_executable(ailinux_ipc_test tests/ailinux_ipc_test.cpp)
+    target_link_libraries(ailinux_ipc_test PRIVATE ailinux_core)
+    target_compile_options(ailinux_ipc_test PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ailinux_ipc_test COMMAND ailinux_ipc_test)
 
     add_test(NAME healthd_once COMMAND ailinux-healthd --once)
     set_tests_properties(healthd_once PROPERTIES
