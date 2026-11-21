@@ -159,6 +159,19 @@ if(BUILD_TESTING)
     )
     add_test(NAME phase8_integration_test COMMAND phase8_integration_test)
 
+    add_executable(phase8_security_regression_test
+        tests/phase8_security_regression_test.cpp
+    )
+    target_include_directories(phase8_security_regression_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/system/ai
+    )
+    target_link_libraries(phase8_security_regression_test PRIVATE ailinux_ai)
+    target_compile_options(phase8_security_regression_test PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME phase8_security_regression_test
+             COMMAND phase8_security_regression_test)
+
     add_test(NAME healthd_once COMMAND ailinux-healthd --once)
     set_tests_properties(healthd_once PROPERTIES
         PASS_REGULAR_EXPRESSION "\"metrics\":.*\"overall\":.*\"schema_version\":1"

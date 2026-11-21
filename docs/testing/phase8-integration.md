@@ -9,7 +9,9 @@ integration boundaries already implemented:
 - verified candidates activate and can be rolled back;
 - malformed release-state data fails closed;
 - Super Self creates and removes a detached, owner-private worktree;
-- the deterministic health monitor emits the documented JSON schema.
+- the deterministic health monitor emits the documented JSON schema;
+- unauthorized tool use, missing confirmation, and privileged-tool access are denied and hashed into the audit store;
+- 1,000 authorized read invocations produce bounded, complete started/executed audit events.
 
 This test does not start the AI core, boot a distribution, modify partitions or
 bootloader configuration, install a kernel, enable a systemd unit, or invoke a
