@@ -1053,6 +1053,38 @@ void test_health_monitor() {
     expect_throw<HealthMonitorError>(
         [&] { static_cast<void>(cpu_monitor.sample()); },
         "malformed procfs OOM counters were accepted");
+
+    HealthAlertManager alerts(2);
+    HealthSnapshot warning{{"2026-11-21T12:00:00Z"},
+                           {{"memory", 96.0, "percent", HealthLevel::warning},
+                            {"oom_kill", 1.0, "count", HealthLevel::critical}}};
+    const auto first_alerts = alerts.evaluate(warning);
+    check(first_alerts.size() == 2 && !first_alerts[0].recovery &&
+              first_alerts[1].level == HealthLevel::critical,
+          "health alert manager did not emit initial warning/critical transitions");
+    const auto duplicate_alerts = alerts.evaluate(warning);
+    check(duplicate_alerts.empty(),
+          "health alert manager repeated an unchanged alert");
+    HealthSnapshot recovered{{"2026-11-21T12:01:00Z"},
+                             {{"memory", 70.0, "percent", HealthLevel::healthy},
+                              {"oom_kill", 0.0, "count", HealthLevel::healthy}}};
+    const auto recovery_alerts = alerts.evaluate(recovered);
+    check(recovery_alerts.size() == 2 && recovery_alerts[0].recovery &&
+              recovery_alerts[0].level == HealthLevel::healthy,
+          "health alert manager did not emit recovery transitions");
+    expect_throw<std::invalid_argument>(
+        [] { static_cast<void>(HealthAlertManager{0}); },
+        "zero-sized health alert state was accepted");
+
+    const auto alert_database = temporary.path() + "/health-alerts.sqlite3";
+    HealthAlertStore alert_store(alert_database, 3);
+    for (const auto& alert : first_alerts) alert_store.record(alert);
+    const auto persisted = alert_store.recent(10);
+    check(persisted.size() == 2 && persisted[0].metric_name == "oom_kill" &&
+              persisted[0].level == HealthLevel::critical &&
+              alert_store.schema_version() == 1 &&
+              alert_store.database_mode() == 0600,
+          "health alert SQLite persistence or private mode was not enforced");
 }
 
 void test_reputation_and_task_persistence() {

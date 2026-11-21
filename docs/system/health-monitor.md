@@ -16,8 +16,12 @@ being reported as healthy.
 `ailinux-healthd` runs this sampler as an unprivileged, periodic service. It
 emits one JSON snapshot per line to standard output (journal under systemd),
 supports a bounded sampling interval and one-shot mode, and exits cleanly on
-SIGTERM/SIGINT. Sampling/output failures are written to standard error and
-cause a nonzero exit so systemd can apply its bounded restart policy. The
+SIGTERM/SIGINT. It also emits state-transition alert records, including
+warning/critical/unknown transitions and recovery events, as separate JSON
+lines. Repeated unchanged metric states are suppressed in memory. The alert
+manager is bounded and has no external notification backend; journal output is
+the current routing boundary. Sampling/output failures are written to standard
+error and cause a nonzero exit so systemd can apply its bounded restart policy. The
 provided systemd unit uses a dynamic unprivileged identity and filesystem,
 device, capability, and network restrictions. Build and install it with CMake;
 installation does not enable or start the service.
@@ -37,8 +41,12 @@ Review the generated unit before installing it on a host. Enabling or starting
 the service is an explicit administrator action and is not part of the build
 or install steps.
 
-The monitor does not take corrective action, execute privileged operations,
-or route alerts. Process checks require trusted PID input. A missing process
+The monitor does not take corrective action or execute privileged operations.
+It provides state-transition alert records but not paging, email, D-Bus, or
+other external notification routing. An explicit `--alert-db PATH` option
+can additionally persist state-transition records in an owner-only SQLite
+database whose directory must be private and record count is bounded to
+10,000 entries. Process checks require trusted PID input. A missing process
 is reported as critical; malformed or inaccessible required metrics raise
 `HealthMonitorError` instead of being silently treated as healthy.
 

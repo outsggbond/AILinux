@@ -80,10 +80,14 @@ memory, swap, disk, load, aggregate interface receive/transmit rates,
 OOM-kill deltas, and configured-process snapshots. `ailinux-healthd`
 periodically emits the snapshots as JSON under a hardened, unprivileged
 systemd unit. Installation does not enable the unit. It does not monitor
-systemd, disk I/O, or alerts. Network rates are informational and have no
-alert thresholds; a newly observed OOM kill is critical. The same serialized
+systemd or disk I/O. Network rates are informational and have no alert
+thresholds; a newly observed OOM kill is critical. The same serialized
 snapshots are available to running Agents through the read-only
-`system.get_health` tool.
+`system.get_health` tool. `health_monitor.cpp` now also provides a bounded
+in-memory alert manager that emits state-transition warning, critical,
+unknown, and recovery records, deduplicating unchanged states. Optional
+owner-only SQLite persistence is implemented for explicit `--alert-db` use;
+external notification routing remains unimplemented.
 Domain Leader election does not implement all three leadership tiers or all
 requested competency rubrics.
 

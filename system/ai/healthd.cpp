@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -24,6 +25,7 @@ constexpr std::uint32_t kMaximumIntervalMs = 3600000;
 struct Options {
     std::uint32_t interval_ms = 10000;
     bool once = false;
+    std::string alert_database;
 };
 
 [[nodiscard]] Options parse_options(int argc, char** argv) {
@@ -31,13 +33,18 @@ struct Options {
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--help") {
-            std::cout << "Usage: ailinux-healthd [--interval-ms N] [--once]\n"
+            std::cout << "Usage: ailinux-healthd [--interval-ms N] [--once] [--alert-db PATH]\n"
                          "  --interval-ms N  Sampling interval (1000..3600000)\n"
-                         "  --once           Emit one snapshot and exit\n";
+                         "  --once           Emit one snapshot and exit\n"
+                         "  --alert-db PATH  Persist state-transition alerts to a private SQLite database\n";
             std::exit(0);
         }
         if (argument == "--once") {
             result.once = true;
+            continue;
+        }
+        if (argument == "--alert-db" && index + 1 < argc) {
+            result.alert_database = argv[++index];
             continue;
         }
         if (argument == "--interval-ms" && index + 1 < argc) {
@@ -87,9 +94,20 @@ int run_service(const Options& options) {
     }
 
     ailinux::ai::DeterministicHealthMonitor monitor;
+    ailinux::ai::HealthAlertManager alerts;
+    std::unique_ptr<ailinux::ai::HealthAlertStore> alert_store;
+    if (!options.alert_database.empty()) {
+        alert_store = std::make_unique<ailinux::ai::HealthAlertStore>(
+            options.alert_database);
+    }
     try {
         while (true) {
-            write_line(ailinux::ai::health_snapshot_to_json(monitor.sample()).dump());
+            const auto snapshot = monitor.sample();
+            write_line(ailinux::ai::health_snapshot_to_json(snapshot).dump());
+            for (const auto& alert : alerts.evaluate(snapshot)) {
+                write_line(ailinux::ai::health_alert_to_json(alert).dump());
+                if (alert_store) alert_store->record(alert);
+            }
             if (options.once) break;
 
             pollfd descriptor{signal_fd, POLLIN, 0};

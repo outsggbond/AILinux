@@ -36,8 +36,51 @@ struct HealthSnapshot {
     [[nodiscard]] HealthLevel overall() const;
 };
 
+struct HealthAlert {
+    std::string sampled_at;
+    std::string metric_name;
+    std::optional<double> value;
+    std::string unit;
+    HealthLevel level;
+    bool recovery;
+};
+
+class HealthAlertManager {
+public:
+    explicit HealthAlertManager(std::size_t maximum_active_metrics = 256);
+
+    [[nodiscard]] std::vector<HealthAlert> evaluate(const HealthSnapshot& snapshot);
+
+private:
+    std::size_t maximum_active_metrics_;
+    std::map<std::string, HealthLevel> active_levels_;
+};
+
+class HealthAlertStore {
+public:
+    explicit HealthAlertStore(const std::string& path,
+                              std::size_t maximum_records = 10000);
+    ~HealthAlertStore();
+
+    HealthAlertStore(const HealthAlertStore&) = delete;
+    HealthAlertStore& operator=(const HealthAlertStore&) = delete;
+
+    void record(const HealthAlert& alert);
+    [[nodiscard]] std::vector<HealthAlert> recent(std::size_t limit) const;
+    [[nodiscard]] int schema_version() const;
+    [[nodiscard]] int database_mode() const;
+
+private:
+    void* database_ = nullptr;
+    std::size_t maximum_records_;
+    std::string path_;
+};
+
 [[nodiscard]] nlohmann::json
 health_snapshot_to_json(const HealthSnapshot& snapshot);
+
+[[nodiscard]] nlohmann::json
+health_alert_to_json(const HealthAlert& alert);
 
 class HealthMonitorError : public std::runtime_error {
 public:

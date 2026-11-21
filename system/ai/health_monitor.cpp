@@ -11,10 +11,13 @@
 #include <cerrno>
 #include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <ctime>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <sqlite3.h>
 #include <regex>
 #include <sstream>
 
@@ -92,6 +95,238 @@ nlohmann::json health_snapshot_to_json(const HealthSnapshot& snapshot) {
             {"sampled_at", snapshot.sampled_at},
             {"overall", to_string(snapshot.overall())},
             {"metrics", std::move(metrics)}};
+}
+
+nlohmann::json health_alert_to_json(const HealthAlert& alert) {
+    return {{"schema_version", 1},
+            {"type", "health_alert"},
+            {"sampled_at", alert.sampled_at},
+            {"metric", alert.metric_name},
+            {"value", alert.value.has_value()
+                          ? nlohmann::json(*alert.value)
+                          : nlohmann::json(nullptr)},
+            {"unit", alert.unit},
+            {"level", to_string(alert.level)},
+            {"recovery", alert.recovery}};
+}
+
+HealthAlertManager::HealthAlertManager(std::size_t maximum_active_metrics)
+    : maximum_active_metrics_(maximum_active_metrics) {
+    if (maximum_active_metrics_ == 0) {
+        throw std::invalid_argument("maximum active health metrics must be positive");
+    }
+}
+
+std::vector<HealthAlert>
+HealthAlertManager::evaluate(const HealthSnapshot& snapshot) {
+    std::vector<HealthAlert> alerts;
+
+    for (const auto& metric : snapshot.metrics) {
+        const auto previous = active_levels_.find(metric.name);
+        const bool unhealthy = metric.level == HealthLevel::warning ||
+                               metric.level == HealthLevel::critical ||
+                               metric.level == HealthLevel::unknown;
+
+        if (unhealthy) {
+            if (previous == active_levels_.end()) {
+                if (active_levels_.size() >= maximum_active_metrics_) {
+                    throw std::runtime_error("health alert metric limit exceeded");
+                }
+                active_levels_.emplace(metric.name, metric.level);
+                alerts.push_back({snapshot.sampled_at, metric.name,
+                                  metric.value, metric.unit,
+                                  metric.level, false});
+            } else if (previous->second != metric.level) {
+                previous->second = metric.level;
+                alerts.push_back({snapshot.sampled_at, metric.name,
+                                  metric.value, metric.unit,
+                                  metric.level, false});
+            }
+        } else if (previous != active_levels_.end()) {
+            active_levels_.erase(previous);
+            alerts.push_back({snapshot.sampled_at, metric.name,
+                              metric.value, metric.unit,
+                              HealthLevel::healthy, true});
+        }
+    }
+
+    return alerts;
+}
+
+HealthAlertStore::HealthAlertStore(const std::string& path,
+                                   std::size_t maximum_records)
+    : maximum_records_(maximum_records), path_(path) {
+    if (path.empty() || maximum_records_ == 0) {
+        throw std::invalid_argument("health alert database path and record limit are required");
+    }
+    std::filesystem::path database_path(path);
+    if (!database_path.has_parent_path()) {
+        throw std::invalid_argument("health alert database path must include a directory");
+    }
+    const auto parent = database_path.parent_path();
+    struct stat parent_info {};
+    if (stat(parent.c_str(), &parent_info) != 0 ||
+        parent_info.st_uid != geteuid() ||
+        (parent_info.st_mode & (S_IWGRP | S_IWOTH)) != 0) {
+        throw std::runtime_error(
+            "health alert database directory must be owned by this user and private");
+    }
+
+    int descriptor = open(path.c_str(), O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
+    const bool created = descriptor >= 0;
+    if (!created && errno == EEXIST) {
+        descriptor = open(path.c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW);
+    }
+    if (descriptor < 0) {
+        throw std::runtime_error("cannot securely open health alert database");
+    }
+    struct stat file_info {};
+    if (fstat(descriptor, &file_info) != 0 || !S_ISREG(file_info.st_mode) ||
+        file_info.st_uid != geteuid() || file_info.st_nlink != 1 ||
+        (!created && (file_info.st_mode & 0077) != 0)) {
+        close(descriptor);
+        throw std::runtime_error("health alert database file permissions are unsafe");
+    }
+    if (created && fchmod(descriptor, 0600) != 0) {
+        close(descriptor);
+        throw std::runtime_error("cannot restrict health alert database permissions");
+    }
+    close(descriptor);
+
+    ::sqlite3* opened_database = nullptr;
+    if (sqlite3_open_v2(path.c_str(), &opened_database,
+                        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
+                        nullptr) != SQLITE_OK) {
+        if (opened_database != nullptr) {
+            sqlite3_close(opened_database);
+        }
+        throw std::runtime_error("cannot open health alert database");
+    }
+    database_ = opened_database;
+    sqlite3_busy_timeout(static_cast<::sqlite3*>(database_), 10000);
+    char* error = nullptr;
+    const char* schema =
+        "CREATE TABLE IF NOT EXISTS health_alerts ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " sampled_at TEXT NOT NULL, metric_name TEXT NOT NULL,"
+        " value REAL, unit TEXT NOT NULL, level TEXT NOT NULL,"
+        " recovery INTEGER NOT NULL CHECK(recovery IN (0,1)));"
+        "PRAGMA user_version=1;";
+    if (sqlite3_exec(static_cast<::sqlite3*>(database_), schema, nullptr, nullptr, &error) != SQLITE_OK) {
+        std::string message = error != nullptr ? error : "cannot initialize health alert database";
+        sqlite3_free(error);
+        sqlite3_close(static_cast<::sqlite3*>(database_));
+        database_ = nullptr;
+        throw std::runtime_error(message);
+    }
+    sqlite3_free(error);
+}
+
+HealthAlertStore::~HealthAlertStore() {
+    if (static_cast<::sqlite3*>(database_) != nullptr) {
+        sqlite3_close(static_cast<::sqlite3*>(database_));
+    }
+}
+
+void HealthAlertStore::record(const HealthAlert& alert) {
+    if (static_cast<::sqlite3*>(database_) == nullptr) {
+        throw std::runtime_error("health alert database is closed");
+    }
+    sqlite3_exec(static_cast<::sqlite3*>(database_), "BEGIN IMMEDIATE", nullptr, nullptr, nullptr);
+    sqlite3_stmt* statement = nullptr;
+    const char* query =
+        "INSERT INTO health_alerts"
+        " (sampled_at,metric_name,value,unit,level,recovery) VALUES (?,?,?,?,?,?)";
+    if (sqlite3_prepare_v2(static_cast<::sqlite3*>(database_), query, -1, &statement, nullptr) != SQLITE_OK) {
+        sqlite3_exec(static_cast<::sqlite3*>(database_), "ROLLBACK", nullptr, nullptr, nullptr);
+        throw std::runtime_error(sqlite3_errmsg(static_cast<::sqlite3*>(database_)));
+    }
+    sqlite3_bind_text(statement, 1, alert.sampled_at.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(statement, 2, alert.metric_name.c_str(), -1, SQLITE_TRANSIENT);
+    if (alert.value.has_value()) sqlite3_bind_double(statement, 3, *alert.value);
+    else sqlite3_bind_null(statement, 3);
+    sqlite3_bind_text(statement, 4, alert.unit.c_str(), -1, SQLITE_TRANSIENT);
+    const auto level = to_string(alert.level);
+    sqlite3_bind_text(statement, 5, level.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(statement, 6, alert.recovery ? 1 : 0);
+    if (sqlite3_step(statement) != SQLITE_DONE) {
+        sqlite3_finalize(statement);
+        sqlite3_exec(static_cast<::sqlite3*>(database_), "ROLLBACK", nullptr, nullptr, nullptr);
+        throw std::runtime_error(sqlite3_errmsg(static_cast<::sqlite3*>(database_)));
+    }
+    sqlite3_finalize(statement);
+
+    char prune[128];
+    snprintf(prune, sizeof(prune),
+             "DELETE FROM health_alerts WHERE id NOT IN "
+             "(SELECT id FROM health_alerts ORDER BY id DESC LIMIT %zu)",
+             maximum_records_);
+    char* error = nullptr;
+    if (sqlite3_exec(static_cast<::sqlite3*>(database_), prune, nullptr, nullptr, &error) != SQLITE_OK) {
+        std::string message = error != nullptr ? error : "cannot prune health alerts";
+        sqlite3_free(error);
+        sqlite3_exec(static_cast<::sqlite3*>(database_), "ROLLBACK", nullptr, nullptr, nullptr);
+        throw std::runtime_error(message);
+    }
+    sqlite3_free(error);
+    if (sqlite3_exec(static_cast<::sqlite3*>(database_), "COMMIT", nullptr, nullptr, &error) != SQLITE_OK) {
+        std::string message = error != nullptr ? error : "cannot commit health alert";
+        sqlite3_free(error);
+        sqlite3_exec(static_cast<::sqlite3*>(database_), "ROLLBACK", nullptr, nullptr, nullptr);
+        throw std::runtime_error(message);
+    }
+}
+
+std::vector<HealthAlert> HealthAlertStore::recent(std::size_t limit) const {
+    if (static_cast<::sqlite3*>(database_) == nullptr || limit == 0) return {};
+    sqlite3_stmt* statement = nullptr;
+    const char* query =
+        "SELECT sampled_at,metric_name,value,unit,level,recovery"
+        " FROM health_alerts ORDER BY id DESC LIMIT ?";
+    if (sqlite3_prepare_v2(static_cast<::sqlite3*>(database_), query, -1, &statement, nullptr) != SQLITE_OK) {
+        throw std::runtime_error(sqlite3_errmsg(static_cast<::sqlite3*>(database_)));
+    }
+    sqlite3_bind_int64(statement, 1, static_cast<sqlite3_int64>(
+                                          std::min(limit, maximum_records_)));
+    std::vector<HealthAlert> result;
+    while (sqlite3_step(statement) == SQLITE_ROW) {
+        HealthLevel level = HealthLevel::healthy;
+        const std::string level_text = reinterpret_cast<const char*>(sqlite3_column_text(statement, 4));
+        if (level_text == "warning") level = HealthLevel::warning;
+        else if (level_text == "critical") level = HealthLevel::critical;
+        else if (level_text == "unknown") level = HealthLevel::unknown;
+        std::optional<double> value;
+        if (sqlite3_column_type(statement, 2) != SQLITE_NULL) {
+            value = sqlite3_column_double(statement, 2);
+        }
+        result.push_back({reinterpret_cast<const char*>(sqlite3_column_text(statement, 0)),
+                          reinterpret_cast<const char*>(sqlite3_column_text(statement, 1)),
+                          value,
+                          reinterpret_cast<const char*>(sqlite3_column_text(statement, 3)),
+                          level,
+                          sqlite3_column_int(statement, 5) != 0});
+    }
+    sqlite3_finalize(statement);
+    return result;
+}
+
+int HealthAlertStore::schema_version() const {
+    if (static_cast<::sqlite3*>(database_) == nullptr) return 0;
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(static_cast<::sqlite3*>(database_), "PRAGMA user_version", -1, &statement, nullptr) != SQLITE_OK) {
+        throw std::runtime_error(sqlite3_errmsg(static_cast<::sqlite3*>(database_)));
+    }
+    int version = sqlite3_step(statement) == SQLITE_ROW ? sqlite3_column_int(statement, 0) : 0;
+    sqlite3_finalize(statement);
+    return version;
+}
+
+int HealthAlertStore::database_mode() const {
+    struct stat info {};
+    if (stat(path_.c_str(), &info) == 0) {
+        return info.st_mode & 0777;
+    }
+    return 0;
 }
 
 DeterministicHealthMonitor::DeterministicHealthMonitor(
