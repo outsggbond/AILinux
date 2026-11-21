@@ -31,6 +31,7 @@ target_compile_options(ailinuxctl PRIVATE
 add_library(ailinux_core
     system/core/self_state.cpp
     system/core/self_state_store.cpp
+    system/core/super_self_workspace.cpp
 )
 
 target_include_directories(ailinux_core PUBLIC
@@ -43,6 +44,14 @@ target_compile_options(ailinux_core PRIVATE
     -Wpedantic
 )
 target_link_libraries(ailinux_core PUBLIC OpenSSL::Crypto)
+
+add_executable(ailinux-super-self
+    system/core/super_self_workspace_main.cpp
+)
+target_compile_options(ailinux-super-self PRIVATE
+    -Wall -Wextra -Wpedantic
+)
+target_link_libraries(ailinux-super-self PRIVATE ailinux_core)
 
 add_library(ailinux_ai
     system/ai/providers.cpp
@@ -109,6 +118,18 @@ if(BUILD_TESTING)
     target_link_libraries(ai_system_test PRIVATE ailinux_ai)
     target_compile_options(ai_system_test PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ai_system_test COMMAND ai_system_test)
+
+    add_executable(super_self_workspace_test
+        tests/super_self_workspace_test.cpp
+    )
+    target_compile_definitions(super_self_workspace_test PRIVATE
+        AILINUX_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    target_link_libraries(super_self_workspace_test PRIVATE ailinux_core)
+    target_compile_options(super_self_workspace_test PRIVATE
+        -Wall -Wextra -Wpedantic
+    )
+    add_test(NAME super_self_workspace_test COMMAND super_self_workspace_test)
 
     add_test(NAME healthd_once COMMAND ailinux-healthd --once)
     set_tests_properties(healthd_once PROPERTIES

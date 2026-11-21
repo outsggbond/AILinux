@@ -132,10 +132,21 @@ requests changes. It does not yet isolate contexts, assign or execute implementa
 verify reported artifacts, or provide a user-facing Council center. Stored
 records are not independently authenticated.
 
-## Phases 6, 7, and 8
+## Phase 6 — Super Self workspace
 
-**Status: Not started.** No isolated Super Self build environment, distribution
-image, recovery environment, or deployment/rollback pipeline is implemented.
+**Status: Initial disposable workspace foundation implemented.**
+`system/core/super_self_workspace.cpp` provides owner-private detached Git
+worktrees outside the source checkout, with no shell command interface and
+explicit create/build/test/remove operations. Builds and tests run only inside
+the disposable workspace and no deployment or release operation is exposed.
+The worktree test is part of CTest and verifies private workspace creation plus
+a successful workspace build.
+
+## Phases 7 and 8
+
+**Status: Not started.** No distribution image, recovery environment,
+deployment/rollback pipeline, or complete integration/fault-injection suite is
+implemented.
 
 ## Verification for this slice
 

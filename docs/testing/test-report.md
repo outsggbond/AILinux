@@ -17,6 +17,7 @@ Scope: host build, C++ self-state foundation, and C++ AI-module prototype
 | Check | Result | Evidence |
 |---|---|---|
 | C++ health-monitor service | PASS | `ailinux-healthd --once` emits a schema-versioned JSON snapshot; periodic mode exits cleanly on SIGTERM, and sampler/output failures are nonzero. |
+| Super Self workspace | PASS | CTest creates an owner-private detached Git worktree outside the source tree and performs a workspace-local CMake/Ninja build; removal is tested as a cleanup operation without deployment. |
 | CMake configure (`cmake -S . -B build/cmake-cpp -G Ninja`) | PASS | Configured with local dependency paths for OpenSSL Crypto, SQLite3, libcurl, and nlohmann-json. |
 | CMake build (`cmake --build build/cpp-only-check`) | PASS | `ailinuxctl`, `ailinux-healthd`, `ailinux_core`, `ailinux_ai`, and all test executables built. |
 | CTest (`ctest --test-dir build/cpp-only-check --output-on-failure`) | PASS | 4/4 C++ test targets passed: state transitions, persistent state journal, AI modules (including Council workflow), and one-shot healthd JSON output. |
