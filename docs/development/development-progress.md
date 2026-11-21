@@ -87,7 +87,10 @@ snapshots are available to running Agents through the read-only
 in-memory alert manager that emits state-transition warning, critical,
 unknown, and recovery records, deduplicating unchanged states. Optional
 owner-only SQLite persistence is implemented for explicit `--alert-db` use;
-external notification routing remains unimplemented.
+external notification routing remains unimplemented. A deterministic,
+read-only Inspector fallback is now emitted with each snapshot and explicitly
+labels warning, critical, and unknown metrics; it does not claim to be an
+elected or qualified AI Inspector.
 Domain Leader election does not implement all three leadership tiers or all
 requested competency rubrics.
 

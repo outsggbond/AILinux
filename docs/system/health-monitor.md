@@ -50,7 +50,13 @@ database whose directory must be private and record count is bounded to
 is reported as critical; malformed or inaccessible required metrics raise
 `HealthMonitorError` instead of being silently treated as healthy.
 
+Each snapshot also includes an explicit `deterministic_inspector_fallback`
+record. This is the degraded monitoring mode for environments with no eligible
+AI Inspector: it lists critical, warning, and unknown metrics but is not an
+Agent identity, election result, or qualified Inspector assessment. It does
+not fabricate an AI verdict or suppress the underlying health metrics.
+
 This is not yet a full Inspector or system health service. Disk I/O,
 temperatures, kernel/systemd logs and services, thread health, Agent health,
-alert routing, persistent health history, and authenticated administrative
-interfaces remain unimplemented.
+external alert routing, and authenticated administrative interfaces remain
+unimplemented.

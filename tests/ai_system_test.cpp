@@ -1085,6 +1085,18 @@ void test_health_monitor() {
               alert_store.schema_version() == 1 &&
               alert_store.database_mode() == 0600,
           "health alert SQLite persistence or private mode was not enforced");
+
+    DeterministicInspectorFallback fallback;
+    const auto fallback_report = fallback.evaluate(warning);
+    check(fallback_report.overall == HealthLevel::critical &&
+              fallback_report.critical_metrics.size() == 1 &&
+              fallback_report.critical_metrics[0] == "oom_kill" &&
+              fallback_report.warning_metrics.size() == 1,
+          "deterministic Inspector fallback did not classify critical/warning metrics");
+    const auto fallback_json = inspector_fallback_to_json(fallback_report);
+    check(fallback_json["type"] == "deterministic_inspector_fallback" &&
+              fallback_json["overall"] == "critical",
+          "deterministic Inspector fallback JSON contract was not emitted");
 }
 
 void test_reputation_and_task_persistence() {

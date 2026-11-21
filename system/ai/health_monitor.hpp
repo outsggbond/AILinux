@@ -76,6 +76,23 @@ private:
     std::string path_;
 };
 
+struct InspectorFallbackReport {
+    std::string sampled_at;
+    HealthLevel overall;
+    std::vector<std::string> critical_metrics;
+    std::vector<std::string> warning_metrics;
+    std::vector<std::string> unknown_metrics;
+};
+
+class DeterministicInspectorFallback {
+public:
+    [[nodiscard]] InspectorFallbackReport evaluate(
+        const HealthSnapshot& snapshot) const;
+};
+
+[[nodiscard]] nlohmann::json
+inspector_fallback_to_json(const InspectorFallbackReport& report);
+
 [[nodiscard]] nlohmann::json
 health_snapshot_to_json(const HealthSnapshot& snapshot);
 

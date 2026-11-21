@@ -95,6 +95,7 @@ int run_service(const Options& options) {
 
     ailinux::ai::DeterministicHealthMonitor monitor;
     ailinux::ai::HealthAlertManager alerts;
+    ailinux::ai::DeterministicInspectorFallback inspector_fallback;
     std::unique_ptr<ailinux::ai::HealthAlertStore> alert_store;
     if (!options.alert_database.empty()) {
         alert_store = std::make_unique<ailinux::ai::HealthAlertStore>(
@@ -108,6 +109,8 @@ int run_service(const Options& options) {
                 write_line(ailinux::ai::health_alert_to_json(alert).dump());
                 if (alert_store) alert_store->record(alert);
             }
+            write_line(ailinux::ai::inspector_fallback_to_json(
+                           inspector_fallback.evaluate(snapshot)).dump());
             if (options.once) break;
 
             pollfd descriptor{signal_fd, POLLIN, 0};

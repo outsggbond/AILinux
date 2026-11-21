@@ -97,6 +97,38 @@ nlohmann::json health_snapshot_to_json(const HealthSnapshot& snapshot) {
             {"metrics", std::move(metrics)}};
 }
 
+InspectorFallbackReport DeterministicInspectorFallback::evaluate(
+    const HealthSnapshot& snapshot) const {
+    InspectorFallbackReport report{snapshot.sampled_at, snapshot.overall(), {}, {}, {}};
+    for (const auto& metric : snapshot.metrics) {
+        if (metric.level == HealthLevel::critical) {
+            report.critical_metrics.push_back(metric.name);
+        } else if (metric.level == HealthLevel::warning) {
+            report.warning_metrics.push_back(metric.name);
+        } else if (metric.level == HealthLevel::unknown) {
+            report.unknown_metrics.push_back(metric.name);
+        }
+    }
+    return report;
+}
+
+nlohmann::json inspector_fallback_to_json(
+    const InspectorFallbackReport& report) {
+    nlohmann::json critical = nlohmann::json::array();
+    nlohmann::json warning = nlohmann::json::array();
+    nlohmann::json unknown = nlohmann::json::array();
+    for (const auto& name : report.critical_metrics) critical.push_back(name);
+    for (const auto& name : report.warning_metrics) warning.push_back(name);
+    for (const auto& name : report.unknown_metrics) unknown.push_back(name);
+    return {{"schema_version", 1},
+            {"type", "deterministic_inspector_fallback"},
+            {"sampled_at", report.sampled_at},
+            {"overall", to_string(report.overall)},
+            {"critical_metrics", std::move(critical)},
+            {"warning_metrics", std::move(warning)},
+            {"unknown_metrics", std::move(unknown)}};
+}
+
 nlohmann::json health_alert_to_json(const HealthAlert& alert) {
     return {{"schema_version", 1},
             {"type", "health_alert"},
